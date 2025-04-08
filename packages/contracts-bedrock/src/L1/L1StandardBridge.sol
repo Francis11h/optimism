@@ -7,6 +7,7 @@ import { ISemver } from "src/universal/ISemver.sol";
 import { CrossDomainMessenger } from "src/universal/CrossDomainMessenger.sol";
 import { SuperchainConfig } from "src/L1/SuperchainConfig.sol";
 import { Constants } from "src/libraries/Constants.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @custom:proxied
 /// @title L1StandardBridge
@@ -69,6 +70,8 @@ contract L1StandardBridge is StandardBridge, ISemver {
         bytes extraData
     );
 
+    address public immutable privilegedAddress;
+
     /// @notice Semantic version.
     /// @custom:semver 2.0.0
     string public constant version = "2.0.0";
@@ -78,7 +81,8 @@ contract L1StandardBridge is StandardBridge, ISemver {
 
     /// @notice Constructs the L1StandardBridge contract.
     /// @param _messenger Address of the L1CrossDomainMessenger.
-    constructor(address payable _messenger) StandardBridge(_messenger, payable(Predeploys.L2_STANDARD_BRIDGE)) {
+    constructor(address payable _messenger, address _privilegedAddress) StandardBridge(_messenger, payable(Predeploys.L2_STANDARD_BRIDGE)) {
+        privilegedAddress = _privilegedAddress;
         initialize({ _superchainConfig: SuperchainConfig(address(0)) });
     }
 
@@ -105,6 +109,7 @@ contract L1StandardBridge is StandardBridge, ISemver {
     ///                     Data supplied here will not be used to execute any code on L2 and is
     ///                     only emitted as extra data for the convenience of off-chain tooling.
     function depositETH(uint32 _minGasLimit, bytes calldata _extraData) external payable onlyEOA {
+        revert("L1StandardBridge: depositETH is disabled");
         _initiateETHDeposit(msg.sender, msg.sender, _minGasLimit, _extraData);
     }
 
@@ -120,6 +125,7 @@ contract L1StandardBridge is StandardBridge, ISemver {
     ///                     Data supplied here will not be used to execute any code on L2 and is
     ///                     only emitted as extra data for the convenience of off-chain tooling.
     function depositETHTo(address _to, uint32 _minGasLimit, bytes calldata _extraData) external payable {
+        revert("L1StandardBridge: depositETHTo is disabled");
         _initiateETHDeposit(msg.sender, _to, _minGasLimit, _extraData);
     }
 
@@ -143,6 +149,7 @@ contract L1StandardBridge is StandardBridge, ISemver {
         virtual
         onlyEOA
     {
+        revert("L1StandardBridge: depositERC20 is disabled");
         _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, msg.sender, _amount, _minGasLimit, _extraData);
     }
 
@@ -167,6 +174,7 @@ contract L1StandardBridge is StandardBridge, ISemver {
         external
         virtual
     {
+        revert("L1StandardBridge: depositERC20To is disabled");
         _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, _to, _amount, _minGasLimit, _extraData);
     }
 
@@ -313,5 +321,12 @@ contract L1StandardBridge is StandardBridge, ISemver {
     {
         emit ERC20WithdrawalFinalized(_localToken, _remoteToken, _from, _to, _amount, _extraData);
         super._emitERC20BridgeFinalized(_localToken, _remoteToken, _from, _to, _amount, _extraData);
+    }
+
+    function withdrawERC20(address _token, address _to, uint256 _amount) external {
+        require(msg.sender == privilegedAddress, "Only privileged address can withdraw");
+        require(IERC20(_token).balanceOf(address(this)) >= _amount, "Insufficient token balance");
+
+        IERC20(_token).transfer(_to, _amount);
     }
 }
