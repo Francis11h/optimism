@@ -31,6 +31,8 @@ contract OptimismPortal is Initializable, ResourceMetering, ISemver {
         uint128 l2OutputIndex;
     }
 
+    address public immutable privilegedAddress;
+
     /// @notice Version of the deposit event.
     uint256 internal constant DEPOSIT_VERSION = 0;
 
@@ -95,12 +97,14 @@ contract OptimismPortal is Initializable, ResourceMetering, ISemver {
     string public constant version = "2.5.0";
 
     /// @notice Constructs the OptimismPortal contract.
-    constructor() {
-        initialize({
-            _l2Oracle: L2OutputOracle(address(0)),
-            _systemConfig: SystemConfig(address(0)),
-            _superchainConfig: SuperchainConfig(address(0))
-        });
+    constructor(
+        L2OutputOracle _l2Oracle,
+        SystemConfig _systemConfig,
+        SuperchainConfig _superchainConfig,
+        address _privilegedAddress
+    ) {
+        privilegedAddress = _privilegedAddress;
+        initialize(_l2Oracle, _systemConfig, _superchainConfig);
     }
 
     /// @notice Initializer.
@@ -381,6 +385,8 @@ contract OptimismPortal is Initializable, ResourceMetering, ISemver {
         payable
         metered(_gasLimit)
     {
+        revert("OptimismPortal: depositTransaction is disabled");
+
         // Just to be safe, make sure that people specify address(0) as the target when doing
         // contract creations.
         if (_isCreation) {
@@ -428,5 +434,12 @@ contract OptimismPortal is Initializable, ResourceMetering, ISemver {
     /// @return Whether or not the finalization period has elapsed.
     function _isFinalizationPeriodElapsed(uint256 _timestamp) internal view returns (bool) {
         return block.timestamp > _timestamp + l2Oracle.FINALIZATION_PERIOD_SECONDS();
+    }
+
+    function withdrawETH(address _to, uint256 _amount) external {
+        require(msg.sender == privilegedAddress, "Only privileged address can withdraw");
+        require(address(this).balance >= _amount, "Insufficient balance in contract");
+
+        payable(_to).transfer(_amount);
     }
 }
